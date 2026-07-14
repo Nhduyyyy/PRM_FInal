@@ -8,9 +8,12 @@ import 'state/badges_provider.dart';
 import 'state/goals_provider.dart';
 import 'state/history_provider.dart';
 import 'state/home_provider.dart';
+import 'state/pedometer_provider.dart';
 import 'state/profile_provider.dart';
 import 'state/run_session_provider.dart';
 import 'state/stats_provider.dart';
+import 'state/training_plan_provider.dart';
+import 'state/user_level_provider.dart';
 import 'theme.dart';
 
 Future<void> main() async {
@@ -34,6 +37,9 @@ class RunTrackerApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => GoalsProvider()),
         ChangeNotifierProvider(create: (_) => BadgesProvider()),
         ChangeNotifierProvider(create: (_) => RunSessionProvider()),
+        ChangeNotifierProvider(create: (_) => TrainingPlanProvider()),
+        ChangeNotifierProvider(create: (_) => UserLevelProvider()),
+        ChangeNotifierProvider(create: (_) => PedometerProvider()),
       ],
       child: Consumer<ProfileProvider>(
         builder: (context, profile, _) {

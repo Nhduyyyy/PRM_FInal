@@ -66,6 +66,24 @@ dependencies:
   intl: ^0.19.0
   uuid: ^4.5.1
 
+  # Voice coaching / voice memo
+  flutter_tts: ^4.2.0
+  record: ^6.0.0
+  audioplayers: ^6.1.0
+
+  # Sensors
+  sensors_plus: ^6.1.0
+  pedometer: ^4.0.2
+
+  # Share Card rendering
+  screenshot: ^3.0.0
+
+  # Home screen widget (Android)
+  home_widget: ^0.7.0
+
+  # Backup & Restore file picking
+  file_picker: ^10.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -62,4 +62,19 @@ class BadgeDao {
 
     return newlyUnlocked;
   }
+
+  /// Groups badges sharing the same [RunBadge.conditionType] into a single
+  /// "family" (e.g. all total_km badges are tiers of one achievement), sorted
+  /// by ascending condition value so tiers render bronze -> silver -> gold.
+  Future<Map<String, List<RunBadge>>> getBadgeFamilies() async {
+    final all = await getAllBadges();
+    final families = <String, List<RunBadge>>{};
+    for (final badge in all) {
+      families.putIfAbsent(badge.conditionType, () => []).add(badge);
+    }
+    for (final family in families.values) {
+      family.sort((a, b) => a.conditionValue.compareTo(b.conditionValue));
+    }
+    return families;
+  }
 }

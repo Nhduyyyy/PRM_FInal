@@ -57,6 +57,17 @@ class ActivityDao {
     return rows.map(RunActivity.fromMap).toList();
   }
 
+  Future<List<RunActivity>> getByType(String activityType) async {
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.query(
+      'activities',
+      where: 'activity_type = ?',
+      whereArgs: [activityType],
+      orderBy: 'created_at DESC',
+    );
+    return rows.map(RunActivity.fromMap).toList();
+  }
+
   Future<List<RunActivity>> getInRange(String startDate, String endDate) async {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
@@ -139,5 +150,17 @@ class ActivityDao {
     final rows = await db.query('activities', orderBy: 'duration_seconds DESC', limit: 1);
     if (rows.isEmpty) return null;
     return RunActivity.fromMap(rows.first);
+  }
+
+  /// Distinct `plan_day_id`s that have at least one logged activity —
+  /// used to mark training-plan days as completed.
+  Future<Set<int>> getCompletedPlanDayIds() async {
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.query(
+      'activities',
+      columns: ['DISTINCT plan_day_id'],
+      where: 'plan_day_id IS NOT NULL',
+    );
+    return rows.map((r) => r['plan_day_id'] as int).toSet();
   }
 }

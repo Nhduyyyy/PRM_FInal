@@ -5,6 +5,8 @@ import '../../state/history_provider.dart';
 import '../../widgets/activity_card.dart';
 import '../../widgets/empty_state.dart';
 import '../activity_detail/activity_detail_screen.dart';
+import '../compare/compare_runs_screen.dart';
+import '../heatmap/all_routes_heatmap_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -25,7 +27,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final history = context.watch<HistoryProvider>();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Lịch sử')),
+      appBar: AppBar(
+        title: const Text('Lịch sử'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.map_outlined),
+            tooltip: 'Bản đồ tổng hợp',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const AllRoutesHeatmapScreen()),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.compare_arrows),
+            tooltip: 'So sánh buổi chạy',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CompareRunsScreen()),
+            ),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(

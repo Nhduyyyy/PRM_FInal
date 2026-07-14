@@ -5,6 +5,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../db/models.dart';
+import '../../db/user_level_dao.dart';
+import '../../services/home_widget_service.dart';
+import '../../services/voice_memo_service.dart';
 import '../../state/badges_provider.dart';
 import '../../state/goals_provider.dart';
 import '../../state/history_provider.dart';
@@ -12,6 +15,8 @@ import '../../state/home_provider.dart';
 import '../../state/profile_provider.dart';
 import '../../state/run_session_provider.dart';
 import '../../state/stats_provider.dart';
+import '../../state/training_plan_provider.dart';
+import '../../state/user_level_provider.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/badge_icons.dart';
 import '../../widgets/route_map_view.dart';
@@ -29,15 +34,43 @@ class RunSummaryScreen extends StatefulWidget {
 class _RunSummaryScreenState extends State<RunSummaryScreen> {
   final _noteController = TextEditingController();
   final _tagController = TextEditingController();
+  final _voiceMemoService = VoiceMemoService();
   String? _mood;
   String? _photoPath;
+  String? _audioNotePath;
+  bool _recording = false;
   bool _saving = false;
 
   @override
   void dispose() {
     _noteController.dispose();
     _tagController.dispose();
+    _voiceMemoService.dispose();
     super.dispose();
+  }
+
+  Future<void> _toggleRecording() async {
+    if (_recording) {
+      final path = await _voiceMemoService.stopRecording();
+      setState(() {
+        _recording = false;
+        _audioNotePath = path;
+      });
+      return;
+    }
+
+    final path = await _voiceMemoService.startRecording();
+    if (path == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cần quyền microphone để ghi âm.')),
+      );
+      return;
+    }
+    setState(() {
+      _recording = true;
+      _audioNotePath = null;
+    });
   }
 
   Future<void> _pickPhoto() async {
@@ -83,6 +116,12 @@ class _RunSummaryScreenState extends State<RunSummaryScreen> {
 
   Future<void> _save() async {
     setState(() => _saving = true);
+    if (_recording) {
+      _audioNotePath = await _voiceMemoService.stopRecording();
+      _recording = false;
+    }
+    if (!mounted) return;
+
     final session = context.read<RunSessionProvider>();
     final weightKg = context.read<ProfileProvider>().profile?.weightKg ?? 60;
 
@@ -92,6 +131,7 @@ class _RunSummaryScreenState extends State<RunSummaryScreen> {
       mood: _mood,
       photoPath: _photoPath,
       locationTag: _tagController.text.trim().isEmpty ? null : _tagController.text.trim(),
+      audioNotePath: _audioNotePath,
     );
 
     if (!mounted) return;
@@ -101,6 +141,8 @@ class _RunSummaryScreenState extends State<RunSummaryScreen> {
     final statsProvider = context.read<StatsProvider>();
     final goalsProvider = context.read<GoalsProvider>();
     final badgesProvider = context.read<BadgesProvider>();
+    final trainingPlanProvider = context.read<TrainingPlanProvider>();
+    final userLevelProvider = context.read<UserLevelProvider>();
 
     await profileProvider.refreshStreak();
     await homeProvider.load();
@@ -108,9 +150,16 @@ class _RunSummaryScreenState extends State<RunSummaryScreen> {
     statsProvider.load();
     goalsProvider.load();
     badgesProvider.load();
+    trainingPlanProvider.load();
+    userLevelProvider.load();
+    HomeWidgetService.refresh();
 
     if (result.newBadges.isNotEmpty && mounted) {
       await _showBadgeUnlockDialog(result.newBadges);
+    }
+
+    if (result.leveledUp && mounted) {
+      await _showLevelUpDialog(result.updatedLevel);
     }
 
     if (!mounted) return;
@@ -135,6 +184,21 @@ class _RunSummaryScreenState extends State<RunSummaryScreen> {
                 subtitle: Text(b.description),
               ),
           ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Tuyệt vời!')),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showLevelUpDialog(UserLevel level) {
+    return showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('⭐ Lên cấp!'),
+        content: Text(
+          'Bạn đã đạt Level ${level.currentLevel} — ${UserLevelDao.nameForLevel(level.currentLevel)}!',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Tuyệt vời!')),
@@ -176,6 +240,8 @@ class _RunSummaryScreenState extends State<RunSummaryScreen> {
               _StatBox(label: 'Thời gian', value: Formatters.duration(session.elapsed.inSeconds)),
               _StatBox(label: 'Pace TB', value: Formatters.pace(session.avgPaceSecPerKm)),
               _StatBox(label: 'Calo', value: '${session.estimatedCalories(weightKg)} kcal'),
+              if (session.elevationGainM > 0)
+                _StatBox(label: 'Độ cao leo', value: '${session.elevationGainM.toStringAsFixed(0)} m'),
             ],
           ),
           const SizedBox(height: 24),
@@ -215,6 +281,16 @@ class _RunSummaryScreenState extends State<RunSummaryScreen> {
             onPressed: _pickPhoto,
             icon: const Icon(Icons.add_a_photo_outlined),
             label: const Text('Thêm ảnh'),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: _toggleRecording,
+            icon: Icon(_recording ? Icons.stop_circle_outlined : Icons.mic_none),
+            label: Text(
+              _recording
+                  ? 'Đang ghi âm... (bấm để dừng)'
+                  : (_audioNotePath != null ? 'Đã ghi âm cảm nhận' : 'Ghi âm cảm nhận'),
+            ),
           ),
           if (_photoPath != null) ...[
             const SizedBox(height: 12),

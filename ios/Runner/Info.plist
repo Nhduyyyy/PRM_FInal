@@ -34,6 +34,10 @@
 	<string>Run Tracker cần quyền camera để bạn chụp ảnh sau buổi chạy.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Run Tracker cần quyền thư viện ảnh để bạn chọn ảnh đính kèm buổi chạy.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Run Tracker cần quyền cảm biến chuyển động để đếm số bước chân hàng ngày.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Run Tracker cần quyền microphone để bạn ghi âm cảm nhận sau buổi chạy.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>

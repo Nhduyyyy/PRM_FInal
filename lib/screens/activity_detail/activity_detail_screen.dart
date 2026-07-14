@@ -7,9 +7,13 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../db/activity_dao.dart';
 import '../../db/models.dart';
+import '../../models/activity_type.dart';
 import '../../services/location_service.dart';
+import '../../services/voice_memo_service.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/route_map_view.dart';
+import 'route_replay_screen.dart';
+import 'share_card_preview_screen.dart';
 
 class ActivityDetailScreen extends StatefulWidget {
   final int activityId;
@@ -21,7 +25,9 @@ class ActivityDetailScreen extends StatefulWidget {
 
 class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   final ActivityDao _activityDao = ActivityDao();
+  final VoiceMemoService _voiceMemoService = VoiceMemoService();
   RunActivity? _activity;
+  bool _playingAudio = false;
 
   @override
   void initState() {
@@ -29,9 +35,25 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _voiceMemoService.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     final activity = await _activityDao.getById(widget.activityId);
     if (mounted) setState(() => _activity = activity);
+  }
+
+  Future<void> _toggleAudioNote(String path) async {
+    if (_playingAudio) {
+      await _voiceMemoService.stopPlayback();
+      setState(() => _playingAudio = false);
+    } else {
+      await _voiceMemoService.play(path);
+      setState(() => _playingAudio = true);
+    }
   }
 
   Future<void> _delete() async {
@@ -96,6 +118,16 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     return segments;
   }
 
+  List<FlSpot> _elevationSpots(List<RoutePoint> points) {
+    if (points.length < 2) return [];
+    final n = points.length;
+    final cumDist = List<double>.filled(n, 0);
+    for (var i = 1; i < n; i++) {
+      cumDist[i] = cumDist[i - 1] + LocationService.distanceBetween(points[i - 1], points[i]);
+    }
+    return [for (var i = 0; i < n; i++) FlSpot(cumDist[i] / 1000, points[i].alt)];
+  }
+
   @override
   Widget build(BuildContext context) {
     final activity = _activity;
@@ -108,18 +140,41 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
         .toList();
     final paceSegments = _paceSegments(points);
     final scheme = Theme.of(context).colorScheme;
+    final activityType = ActivityType.fromKey(activity.activityType);
+    final elevationSpots = _elevationSpots(points);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(Formatters.dateFriendly(activity.date)),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(activityType.icon, size: 18),
+            const SizedBox(width: 8),
+            Text(Formatters.dateFriendly(activity.date)),
+          ],
+        ),
         actions: [
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'delete') _delete();
               if (value == 'share') _share();
+              if (value == 'replay') {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => RouteReplayScreen(points: points)),
+                );
+              }
+              if (value == 'share_card') {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ShareCardPreviewScreen(activity: activity, points: points),
+                  ),
+                );
+              }
             },
             itemBuilder: (ctx) => const [
-              PopupMenuItem(value: 'share', child: Text('Chia sẻ')),
+              PopupMenuItem(value: 'replay', child: Text('Xem lại lộ trình')),
+              PopupMenuItem(value: 'share_card', child: Text('Tạo ảnh chia sẻ')),
+              PopupMenuItem(value: 'share', child: Text('Chia sẻ nhanh')),
               PopupMenuItem(value: 'delete', child: Text('Xoá')),
             ],
           ),
@@ -156,9 +211,36 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
               _Stat(label: 'Pace TB', value: Formatters.pace(activity.avgPaceSecPerKm)),
               _Stat(label: 'Pace tốt nhất', value: Formatters.pace(activity.bestPaceSecPerKm)),
               _Stat(label: 'Calo', value: '${activity.calories} kcal'),
+              if (activity.elevationGainM > 0)
+                _Stat(label: 'Độ cao leo', value: '${activity.elevationGainM.toStringAsFixed(0)} m'),
               if (activity.mood != null) _Stat(label: 'Cảm nhận', value: activity.mood!),
             ],
           ),
+          if (activity.elevationGainM > 0 && elevationSpots.length > 1) ...[
+            const SizedBox(height: 24),
+            Text('Độ cao theo lộ trình', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 120,
+              child: LineChart(
+                LineChartData(
+                  gridData: const FlGridData(show: false),
+                  borderData: FlBorderData(show: false),
+                  titlesData: const FlTitlesData(show: false),
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: elevationSpots,
+                      isCurved: true,
+                      color: scheme.primary,
+                      barWidth: 2,
+                      dotData: const FlDotData(show: false),
+                      belowBarData: BarAreaData(show: true, color: scheme.primary.withValues(alpha: 0.15)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
           if (paceSegments.isNotEmpty) ...[
             const SizedBox(height: 24),
             Text('Pace theo từng km', style: Theme.of(context).textTheme.titleSmall),
@@ -188,6 +270,16 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                   ],
                 ),
               ),
+            ),
+          ],
+          if (activity.audioNotePath != null && File(activity.audioNotePath!).existsSync()) ...[
+            const SizedBox(height: 24),
+            Text('Ghi âm cảm nhận', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => _toggleAudioNote(activity.audioNotePath!),
+              icon: Icon(_playingAudio ? Icons.stop : Icons.play_arrow),
+              label: Text(_playingAudio ? 'Dừng' : 'Nghe lại'),
             ),
           ],
           if (activity.note != null && activity.note!.isNotEmpty) ...[

@@ -33,6 +33,7 @@ class ExportUtil {
 
   static Future<File> _writeTempFile(String name, String content) async {
     final dir = await getTemporaryDirectory();
+    await dir.create(recursive: true);
     final file = File('${dir.path}/$name');
     return file.writeAsString(content);
   }

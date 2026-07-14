@@ -73,15 +73,17 @@ class RoutePoint {
   final double lat;
   final double lng;
   final int t; // milliseconds since epoch
+  final double alt; // meters above sea level, 0 if unavailable
 
-  const RoutePoint({required this.lat, required this.lng, required this.t});
+  const RoutePoint({required this.lat, required this.lng, required this.t, this.alt = 0});
 
-  Map<String, Object?> toJson() => {'lat': lat, 'lng': lng, 't': t};
+  Map<String, Object?> toJson() => {'lat': lat, 'lng': lng, 't': t, 'alt': alt};
 
   factory RoutePoint.fromJson(Map<String, dynamic> json) => RoutePoint(
         lat: (json['lat'] as num).toDouble(),
         lng: (json['lng'] as num).toDouble(),
         t: (json['t'] as num).toInt(),
+        alt: (json['alt'] as num?)?.toDouble() ?? 0,
       );
 }
 
@@ -99,6 +101,13 @@ class RunActivity {
   final String? photoPath;
   final String? locationTag;
   final String createdAt;
+  final String activityType; // run | walk | cycle | hike
+  final String workoutMode; // free | interval | plan
+  final String? intervalConfig; // JSON, nullable
+  final int? planDayId;
+  final String? audioNotePath;
+  final double elevationGainM;
+  final double xpEarned;
 
   const RunActivity({
     this.id,
@@ -114,6 +123,13 @@ class RunActivity {
     this.photoPath,
     this.locationTag,
     required this.createdAt,
+    this.activityType = 'run',
+    this.workoutMode = 'free',
+    this.intervalConfig,
+    this.planDayId,
+    this.audioNotePath,
+    this.elevationGainM = 0,
+    this.xpEarned = 0,
   });
 
   RunActivity copyWith({
@@ -121,6 +137,7 @@ class RunActivity {
     String? mood,
     String? photoPath,
     String? locationTag,
+    String? audioNotePath,
   }) {
     return RunActivity(
       id: id,
@@ -136,6 +153,13 @@ class RunActivity {
       photoPath: photoPath ?? this.photoPath,
       locationTag: locationTag ?? this.locationTag,
       createdAt: createdAt,
+      activityType: activityType,
+      workoutMode: workoutMode,
+      intervalConfig: intervalConfig,
+      planDayId: planDayId,
+      audioNotePath: audioNotePath ?? this.audioNotePath,
+      elevationGainM: elevationGainM,
+      xpEarned: xpEarned,
     );
   }
 
@@ -153,6 +177,13 @@ class RunActivity {
         'photo_path': photoPath,
         'location_tag': locationTag,
         'created_at': createdAt,
+        'activity_type': activityType,
+        'workout_mode': workoutMode,
+        'interval_config': intervalConfig,
+        'plan_day_id': planDayId,
+        'audio_note_path': audioNotePath,
+        'elevation_gain_m': elevationGainM,
+        'xp_earned': xpEarned,
       };
 
   factory RunActivity.fromMap(Map<String, Object?> map) => RunActivity(
@@ -169,6 +200,13 @@ class RunActivity {
         photoPath: map['photo_path'] as String?,
         locationTag: map['location_tag'] as String?,
         createdAt: map['created_at'] as String,
+        activityType: map['activity_type'] as String? ?? 'run',
+        workoutMode: map['workout_mode'] as String? ?? 'free',
+        intervalConfig: map['interval_config'] as String?,
+        planDayId: map['plan_day_id'] as int?,
+        audioNotePath: map['audio_note_path'] as String?,
+        elevationGainM: (map['elevation_gain_m'] as num?)?.toDouble() ?? 0,
+        xpEarned: (map['xp_earned'] as num?)?.toDouble() ?? 0,
       );
 }
 
@@ -215,6 +253,7 @@ class RunBadge {
   final String conditionType; // 'total_km', 'streak_days', 'single_run_km'
   final double conditionValue;
   final String icon;
+  final String tier; // bronze | silver | gold | single
 
   const RunBadge({
     required this.id,
@@ -223,6 +262,7 @@ class RunBadge {
     required this.conditionType,
     required this.conditionValue,
     required this.icon,
+    this.tier = 'single',
   });
 
   Map<String, Object?> toMap() => {
@@ -232,6 +272,7 @@ class RunBadge {
         'condition_type': conditionType,
         'condition_value': conditionValue,
         'icon': icon,
+        'tier': tier,
       };
 
   factory RunBadge.fromMap(Map<String, Object?> map) => RunBadge(
@@ -241,6 +282,7 @@ class RunBadge {
         conditionType: map['condition_type'] as String,
         conditionValue: (map['condition_value'] as num).toDouble(),
         icon: map['icon'] as String,
+        tier: map['tier'] as String? ?? 'single',
       );
 }
 
@@ -289,5 +331,234 @@ class StreakInfo {
         currentStreak: map['current_streak'] as int? ?? 0,
         bestStreak: map['best_streak'] as int? ?? 0,
         lastRunDate: map['last_run_date'] as String?,
+      );
+}
+
+class TrainingPlan {
+  final int? id;
+  final String name;
+  final String? description;
+  final int totalWeeks;
+  final String? level; // beginner | intermediate | advanced
+
+  const TrainingPlan({
+    this.id,
+    required this.name,
+    this.description,
+    required this.totalWeeks,
+    this.level,
+  });
+
+  Map<String, Object?> toMap() => {
+        if (id != null) 'id': id,
+        'name': name,
+        'description': description,
+        'total_weeks': totalWeeks,
+        'level': level,
+      };
+
+  factory TrainingPlan.fromMap(Map<String, Object?> map) => TrainingPlan(
+        id: map['id'] as int?,
+        name: map['name'] as String,
+        description: map['description'] as String?,
+        totalWeeks: map['total_weeks'] as int,
+        level: map['level'] as String?,
+      );
+}
+
+class TrainingPlanDay {
+  final int? id;
+  final int planId;
+  final int weekNumber;
+  final int dayNumber; // 1-7 within the week
+  final String dayType; // rest | easy_run | interval | long_run
+  final double? targetDistanceKm;
+  final int? targetDurationSeconds;
+  final String? description;
+
+  const TrainingPlanDay({
+    this.id,
+    required this.planId,
+    required this.weekNumber,
+    required this.dayNumber,
+    required this.dayType,
+    this.targetDistanceKm,
+    this.targetDurationSeconds,
+    this.description,
+  });
+
+  Map<String, Object?> toMap() => {
+        if (id != null) 'id': id,
+        'plan_id': planId,
+        'week_number': weekNumber,
+        'day_number': dayNumber,
+        'day_type': dayType,
+        'target_distance_km': targetDistanceKm,
+        'target_duration_seconds': targetDurationSeconds,
+        'description': description,
+      };
+
+  factory TrainingPlanDay.fromMap(Map<String, Object?> map) => TrainingPlanDay(
+        id: map['id'] as int?,
+        planId: map['plan_id'] as int,
+        weekNumber: map['week_number'] as int,
+        dayNumber: map['day_number'] as int,
+        dayType: map['day_type'] as String,
+        targetDistanceKm: (map['target_distance_km'] as num?)?.toDouble(),
+        targetDurationSeconds: map['target_duration_seconds'] as int?,
+        description: map['description'] as String?,
+      );
+}
+
+class ActivePlan {
+  final int id;
+  final int? planId;
+  final String? startDate; // yyyy-MM-dd
+
+  const ActivePlan({this.id = 1, this.planId, this.startDate});
+
+  bool get hasActivePlan => planId != null && startDate != null;
+
+  Map<String, Object?> toMap() => {
+        'id': id,
+        'plan_id': planId,
+        'start_date': startDate,
+      };
+
+  factory ActivePlan.fromMap(Map<String, Object?> map) => ActivePlan(
+        id: map['id'] as int? ?? 1,
+        planId: map['plan_id'] as int?,
+        startDate: map['start_date'] as String?,
+      );
+}
+
+class UserLevel {
+  final int id;
+  final double totalXp;
+  final int currentLevel;
+
+  const UserLevel({this.id = 1, this.totalXp = 0, this.currentLevel = 1});
+
+  Map<String, Object?> toMap() => {
+        'id': id,
+        'total_xp': totalXp,
+        'current_level': currentLevel,
+      };
+
+  factory UserLevel.fromMap(Map<String, Object?> map) => UserLevel(
+        id: map['id'] as int? ?? 1,
+        totalXp: (map['total_xp'] as num?)?.toDouble() ?? 0,
+        currentLevel: map['current_level'] as int? ?? 1,
+      );
+}
+
+class WorkoutTemplate {
+  final int? id;
+  final String name;
+  final String configJson; // JSON-encoded list of segments
+  final String createdAt;
+
+  const WorkoutTemplate({
+    this.id,
+    required this.name,
+    required this.configJson,
+    required this.createdAt,
+  });
+
+  Map<String, Object?> toMap() => {
+        if (id != null) 'id': id,
+        'name': name,
+        'config_json': configJson,
+        'created_at': createdAt,
+      };
+
+  factory WorkoutTemplate.fromMap(Map<String, Object?> map) => WorkoutTemplate(
+        id: map['id'] as int?,
+        name: map['name'] as String,
+        configJson: map['config_json'] as String,
+        createdAt: map['created_at'] as String,
+      );
+}
+
+/// One segment of an interval workout template, e.g. "fast 400m" or "recover 200m".
+class IntervalSegment {
+  final String type; // fast | recover
+  final String mode; // distance | duration
+  final double value; // meters (mode=distance) or seconds (mode=duration)
+  final int? targetPaceSecPerKm;
+
+  const IntervalSegment({
+    required this.type,
+    required this.mode,
+    required this.value,
+    this.targetPaceSecPerKm,
+  });
+
+  Map<String, Object?> toJson() => {
+        'type': type,
+        'mode': mode,
+        'value': value,
+        'targetPaceSecPerKm': targetPaceSecPerKm,
+      };
+
+  factory IntervalSegment.fromJson(Map<String, dynamic> json) => IntervalSegment(
+        type: json['type'] as String,
+        mode: json['mode'] as String,
+        value: (json['value'] as num).toDouble(),
+        targetPaceSecPerKm: (json['targetPaceSecPerKm'] as num?)?.toInt(),
+      );
+}
+
+class DailyStepsEntry {
+  final String date; // yyyy-MM-dd
+  final int baselineSteps;
+  final int lastSteps;
+
+  const DailyStepsEntry({
+    required this.date,
+    required this.baselineSteps,
+    required this.lastSteps,
+  });
+
+  int get stepsToday => (lastSteps - baselineSteps).clamp(0, 1 << 31);
+
+  Map<String, Object?> toMap() => {
+        'date': date,
+        'baseline_steps': baselineSteps,
+        'last_steps': lastSteps,
+      };
+
+  factory DailyStepsEntry.fromMap(Map<String, Object?> map) => DailyStepsEntry(
+        date: map['date'] as String,
+        baselineSteps: map['baseline_steps'] as int,
+        lastSteps: map['last_steps'] as int,
+      );
+}
+
+class WeeklyChallenge {
+  final int? id;
+  final String weekStartDate; // yyyy-MM-dd, Monday of the week
+  final double targetKm;
+  final bool achieved;
+
+  const WeeklyChallenge({
+    this.id,
+    required this.weekStartDate,
+    required this.targetKm,
+    this.achieved = false,
+  });
+
+  Map<String, Object?> toMap() => {
+        if (id != null) 'id': id,
+        'week_start_date': weekStartDate,
+        'target_km': targetKm,
+        'achieved': achieved ? 1 : 0,
+      };
+
+  factory WeeklyChallenge.fromMap(Map<String, Object?> map) => WeeklyChallenge(
+        id: map['id'] as int?,
+        weekStartDate: map['week_start_date'] as String,
+        targetKm: (map['target_km'] as num).toDouble(),
+        achieved: (map['achieved'] as int? ?? 0) == 1,
       );
 }

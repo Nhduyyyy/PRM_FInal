@@ -81,6 +81,25 @@ class LocationService {
     return (durationSeconds / (distanceMeters / 1000.0)).round();
   }
 
+  /// Total climbed elevation across the route: sum of positive altitude
+  /// deltas between consecutive points, ignoring deltas under 1m so GPS
+  /// altitude noise doesn't accumulate into a large fake gain.
+  static double elevationGain(List<RoutePoint> points) {
+    if (points.length < 2) return 0;
+    var gain = 0.0;
+    var lastAlt = points.first.alt;
+    for (var i = 1; i < points.length; i++) {
+      final delta = points[i].alt - lastAlt;
+      if (delta > 1) {
+        gain += delta;
+        lastAlt = points[i].alt;
+      } else if (delta < -1) {
+        lastAlt = points[i].alt;
+      }
+    }
+    return gain;
+  }
+
   /// Best (fastest) pace of any contiguous 1km segment of the route.
   static int? bestPaceSecPerKm(List<RoutePoint> points) {
     final n = points.length;

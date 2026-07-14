@@ -5,6 +5,7 @@ import '../../db/activity_dao.dart';
 import '../../state/badges_provider.dart';
 import '../../state/profile_provider.dart';
 import '../../utils/export_util.dart';
+import '../backup/backup_restore_screen.dart';
 import '../badges/badges_screen.dart';
 import '../goals/goals_screen.dart';
 import 'edit_profile_screen.dart';
@@ -109,6 +110,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             icon: Icons.ios_share_outlined,
             label: 'Xuất dữ liệu',
             onTap: () => _showExportSheet(context),
+          ),
+          _SettingsTile(
+            icon: Icons.settings_backup_restore_outlined,
+            label: 'Sao lưu & Khôi phục',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const BackupRestoreScreen()),
+            ),
           ),
           _SettingsTile(
             icon: Icons.info_outline,

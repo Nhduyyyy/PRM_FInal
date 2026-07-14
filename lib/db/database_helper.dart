@@ -5,6 +5,8 @@ class DatabaseHelper {
   DatabaseHelper._internal();
   static final DatabaseHelper instance = DatabaseHelper._internal();
 
+  static const int schemaVersion = 2;
+
   static Database? _database;
 
   Future<Database> get database async {
@@ -17,8 +19,9 @@ class DatabaseHelper {
     final path = join(dbPath, 'run_tracker.db');
     return openDatabase(
       path,
-      version: 1,
+      version: schemaVersion,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -51,7 +54,14 @@ class DatabaseHelper {
         mood TEXT,
         photo_path TEXT,
         location_tag TEXT,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        activity_type TEXT NOT NULL DEFAULT 'run',
+        workout_mode TEXT NOT NULL DEFAULT 'free',
+        interval_config TEXT,
+        plan_day_id INTEGER,
+        audio_note_path TEXT,
+        elevation_gain_m REAL NOT NULL DEFAULT 0,
+        xp_earned REAL NOT NULL DEFAULT 0
       )
     ''');
 
@@ -73,7 +83,8 @@ class DatabaseHelper {
         description TEXT NOT NULL,
         condition_type TEXT NOT NULL,
         condition_value REAL NOT NULL,
-        icon TEXT NOT NULL
+        icon TEXT NOT NULL,
+        tier TEXT NOT NULL DEFAULT 'single'
       )
     ''');
 
@@ -103,6 +114,160 @@ class DatabaseHelper {
     });
 
     await _seedBadges(db);
+    await _createV2Tables(db);
+    await _seedV2Data(db);
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute("ALTER TABLE activities ADD COLUMN activity_type TEXT NOT NULL DEFAULT 'run'");
+      await db.execute("ALTER TABLE activities ADD COLUMN workout_mode TEXT NOT NULL DEFAULT 'free'");
+      await db.execute('ALTER TABLE activities ADD COLUMN interval_config TEXT');
+      await db.execute('ALTER TABLE activities ADD COLUMN plan_day_id INTEGER');
+      await db.execute('ALTER TABLE activities ADD COLUMN audio_note_path TEXT');
+      await db.execute('ALTER TABLE activities ADD COLUMN elevation_gain_m REAL NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE activities ADD COLUMN xp_earned REAL NOT NULL DEFAULT 0');
+      await db.execute("ALTER TABLE badges ADD COLUMN tier TEXT NOT NULL DEFAULT 'single'");
+
+      await _createV2Tables(db);
+      await _seedV2Data(db);
+    }
+  }
+
+  /// Tables introduced in schema v2 (Pillars A-D expansion).
+  Future<void> _createV2Tables(Database db) async {
+    await db.execute('''
+      CREATE TABLE training_plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
+        total_weeks INTEGER NOT NULL,
+        level TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE training_plan_days (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id INTEGER NOT NULL,
+        week_number INTEGER NOT NULL,
+        day_number INTEGER NOT NULL,
+        day_type TEXT NOT NULL,
+        target_distance_km REAL,
+        target_duration_seconds INTEGER,
+        description TEXT,
+        FOREIGN KEY (plan_id) REFERENCES training_plans (id)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE active_plan (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        plan_id INTEGER,
+        start_date TEXT,
+        FOREIGN KEY (plan_id) REFERENCES training_plans (id)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE user_level (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        total_xp REAL NOT NULL DEFAULT 0,
+        current_level INTEGER NOT NULL DEFAULT 1
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE workout_templates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        config_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE daily_steps (
+        date TEXT PRIMARY KEY,
+        baseline_steps INTEGER NOT NULL,
+        last_steps INTEGER NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE weekly_challenges (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        week_start_date TEXT NOT NULL,
+        target_km REAL NOT NULL,
+        achieved INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+  }
+
+  Future<void> _seedV2Data(Database db) async {
+    await db.update('badges', {'tier': 'bronze'}, where: 'id = 4');
+    await db.update('badges', {'tier': 'silver'}, where: 'id = 5');
+    await db.update('badges', {'tier': 'gold'}, where: 'id = 6');
+
+    await db.insert('user_level', {'id': 1, 'total_xp': 0.0, 'current_level': 1});
+    await db.insert('active_plan', {'id': 1, 'plan_id': null, 'start_date': null});
+
+    await _seedCouchTo5kPlan(db);
+  }
+
+  /// Seeds the default "Từ 0 đến 5K trong 8 tuần" beginner training plan.
+  Future<void> _seedCouchTo5kPlan(Database db) async {
+    final planId = await db.insert('training_plans', {
+      'name': 'Từ 0 đến 5K trong 8 tuần',
+      'description': 'Lộ trình luyện tập dành cho người mới bắt đầu, tăng dần cường độ qua 8 tuần.',
+      'total_weeks': 8,
+      'level': 'beginner',
+    });
+
+    final days = <Map<String, Object?>>[];
+    for (var week = 1; week <= 8; week++) {
+      final easyKm = 1.0 + week * 0.3;
+      final longKm = 2.0 + week * 0.5;
+      for (var day = 1; day <= 7; day++) {
+        String dayType;
+        double? targetKm;
+        int? targetDuration;
+        String description;
+
+        if (day == 6) {
+          dayType = 'interval';
+          targetDuration = (15 + week) * 60;
+          description = 'Interval: xen kẽ chạy nhanh và đi bộ trong ${15 + week} phút.';
+        } else if (day == 7) {
+          dayType = 'long_run';
+          targetKm = double.parse(longKm.toStringAsFixed(1));
+          description = 'Chạy dài ${targetKm.toStringAsFixed(1)}km, giữ pace thoải mái.';
+        } else if (day == 2 || day == 4) {
+          dayType = 'easy_run';
+          targetKm = double.parse(easyKm.toStringAsFixed(1));
+          description = 'Chạy nhẹ ${targetKm.toStringAsFixed(1)}km.';
+        } else {
+          dayType = 'rest';
+          description = 'Ngày nghỉ, hồi phục cơ thể.';
+        }
+
+        days.add({
+          'plan_id': planId,
+          'week_number': week,
+          'day_number': day,
+          'day_type': dayType,
+          'target_distance_km': targetKm,
+          'target_duration_seconds': targetDuration,
+          'description': description,
+        });
+      }
+    }
+
+    final batch = db.batch();
+    for (final day in days) {
+      batch.insert('training_plan_days', day);
+    }
+    await batch.commit(noResult: true);
   }
 
   Future<void> _seedBadges(Database db) async {

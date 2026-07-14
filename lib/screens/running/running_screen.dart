@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../db/models.dart';
+import '../../models/activity_type.dart';
 import '../../services/location_service.dart';
 import '../../state/profile_provider.dart';
 import '../../state/run_session_provider.dart';
@@ -9,7 +11,16 @@ import '../../widgets/route_map_view.dart';
 import '../run_summary/run_summary_screen.dart';
 
 class RunningScreen extends StatefulWidget {
-  const RunningScreen({super.key});
+  final ActivityType activityType;
+  final WorkoutTemplate? template;
+  final int? planDayId;
+
+  const RunningScreen({
+    super.key,
+    this.activityType = ActivityType.run,
+    this.template,
+    this.planDayId,
+  });
 
   @override
   State<RunningScreen> createState() => _RunningScreenState();
@@ -24,7 +35,11 @@ class _RunningScreenState extends State<RunningScreen> {
 
   Future<void> _start() async {
     final session = context.read<RunSessionProvider>();
-    final result = await session.start();
+    final result = await session.start(
+      activityType: widget.activityType,
+      template: widget.template,
+      planDayId: widget.planDayId,
+    );
     if (!mounted) return;
 
     if (result != LocationAccessResult.granted) {
@@ -81,6 +96,8 @@ class _RunningScreenState extends State<RunningScreen> {
     final weightKg = context.watch<ProfileProvider>().profile?.weightKg ?? 60;
     final scheme = Theme.of(context).colorScheme;
     final isPaused = session.state == RunSessionState.paused;
+    final isAutoPaused = session.isAutoPaused;
+    final segments = session.segments;
 
     return PopScope(
       canPop: false,
@@ -92,12 +109,32 @@ class _RunningScreenState extends State<RunningScreen> {
               child: Stack(
                 children: [
                   Positioned.fill(child: RouteMapView(points: session.points)),
+                  Positioned(
+                    top: 48,
+                    left: 16,
+                    child: _ActivityTypeChip(type: session.activityType),
+                  ),
+                  Positioned(
+                    top: 48,
+                    right: 16,
+                    child: _MuteButton(session: session),
+                  ),
                   if (session.gpsWeak)
-                    Positioned(
-                      top: 48,
+                    const Positioned(
+                      top: 96,
                       left: 16,
                       right: 16,
                       child: _WarningBanner(text: 'Tín hiệu GPS yếu'),
+                    ),
+                  if (isAutoPaused)
+                    const Positioned(
+                      bottom: 16,
+                      left: 16,
+                      right: 16,
+                      child: _WarningBanner(
+                        text: 'Tự động tạm dừng — đứng yên',
+                        icon: Icons.pause_circle_outline,
+                      ),
                     ),
                 ],
               ),
@@ -115,6 +152,13 @@ class _RunningScreenState extends State<RunningScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (segments != null && segments.isNotEmpty) ...[
+                        _IntervalProgress(
+                          segments: segments,
+                          currentIndex: session.currentSegmentIndex,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                       Text(
                         Formatters.distanceKm(session.distanceKm),
                         style: const TextStyle(fontSize: 56, fontWeight: FontWeight.w800),
@@ -187,7 +231,8 @@ class _MetricColumn extends StatelessWidget {
 
 class _WarningBanner extends StatelessWidget {
   final String text;
-  const _WarningBanner({required this.text});
+  final IconData icon;
+  const _WarningBanner({required this.text, this.icon = Icons.gps_off});
 
   @override
   Widget build(BuildContext context) {
@@ -200,11 +245,84 @@ class _WarningBanner extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.gps_off, color: Colors.white, size: 16),
+          Icon(icon, color: Colors.white, size: 16),
           const SizedBox(width: 8),
           Text(text, style: const TextStyle(color: Colors.white, fontSize: 13)),
         ],
       ),
+    );
+  }
+}
+
+class _ActivityTypeChip extends StatelessWidget {
+  final ActivityType type;
+  const _ActivityTypeChip({required this.type});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(20)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(type.icon, color: Colors.white, size: 16),
+          const SizedBox(width: 6),
+          Text(type.label, style: const TextStyle(color: Colors.white, fontSize: 13)),
+        ],
+      ),
+    );
+  }
+}
+
+class _MuteButton extends StatelessWidget {
+  final RunSessionProvider session;
+  const _MuteButton({required this.session});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle),
+      child: IconButton(
+        icon: Icon(
+          session.voiceEnabled ? Icons.volume_up : Icons.volume_off,
+          color: Colors.white,
+          size: 20,
+        ),
+        onPressed: () => session.setVoiceEnabled(!session.voiceEnabled),
+      ),
+    );
+  }
+}
+
+class _IntervalProgress extends StatelessWidget {
+  final List<IntervalSegment> segments;
+  final int currentIndex;
+  const _IntervalProgress({required this.segments, required this.currentIndex});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final done = currentIndex >= segments.length;
+    final label = done
+        ? 'Đã hoàn thành ${segments.length}/${segments.length} hiệp'
+        : 'Hiệp ${currentIndex + 1}/${segments.length} — '
+            '${segments[currentIndex].type == 'fast' ? 'Chạy nhanh' : 'Hồi phục'}';
+
+    return Column(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: LinearProgressIndicator(
+            value: segments.isEmpty ? 0 : currentIndex / segments.length,
+            minHeight: 8,
+            backgroundColor: scheme.surfaceContainerHighest,
+            color: scheme.primary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(label, style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12)),
+      ],
     );
   }
 }
