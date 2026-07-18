@@ -46,6 +46,16 @@ class PedometerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Cancels the sensor subscription and resets state, so a subsequent
+  /// [start] (e.g. after logging into a different account) starts clean.
+  Future<void> stop() async {
+    await _sub?.cancel();
+    _sub = null;
+    _started = false;
+    _stepsToday = 0;
+    _available = true;
+  }
+
   @override
   void dispose() {
     _sub?.cancel();

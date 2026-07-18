@@ -1,3 +1,4 @@
+import '../services/session_service.dart';
 import 'activity_dao.dart';
 import 'database_helper.dart';
 import 'models.dart';
@@ -7,22 +8,37 @@ class GoalDao {
 
   Future<int> insert(RunGoal goal) async {
     final db = await DatabaseHelper.instance.database;
-    return db.insert('goals', goal.toMap());
+    final map = goal.toMap()..['user_id'] = SessionService.instance.requireUserId;
+    return db.insert('goals', map);
   }
 
   Future<int> update(RunGoal goal) async {
     final db = await DatabaseHelper.instance.database;
-    return db.update('goals', goal.toMap(), where: 'id = ?', whereArgs: [goal.id]);
+    return db.update(
+      'goals',
+      goal.toMap(),
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [goal.id, SessionService.instance.requireUserId],
+    );
   }
 
   Future<int> delete(int id) async {
     final db = await DatabaseHelper.instance.database;
-    return db.delete('goals', where: 'id = ?', whereArgs: [id]);
+    return db.delete(
+      'goals',
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [id, SessionService.instance.requireUserId],
+    );
   }
 
   Future<List<RunGoal>> getAll() async {
     final db = await DatabaseHelper.instance.database;
-    final rows = await db.query('goals', orderBy: 'start_date DESC');
+    final rows = await db.query(
+      'goals',
+      where: 'user_id = ?',
+      whereArgs: [SessionService.instance.requireUserId],
+      orderBy: 'start_date DESC',
+    );
     return rows.map(RunGoal.fromMap).toList();
   }
 
@@ -31,8 +47,8 @@ class GoalDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
       'goals',
-      where: 'type = ? AND start_date <= ? AND end_date >= ?',
-      whereArgs: [type, today, today],
+      where: 'type = ? AND start_date <= ? AND end_date >= ? AND user_id = ?',
+      whereArgs: [type, today, today, SessionService.instance.requireUserId],
       orderBy: 'start_date DESC',
       limit: 1,
     );

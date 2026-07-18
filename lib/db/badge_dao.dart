@@ -1,3 +1,4 @@
+import '../services/session_service.dart';
 import 'database_helper.dart';
 import 'models.dart';
 
@@ -10,7 +11,12 @@ class BadgeDao {
 
   Future<List<UserBadge>> getUnlockedBadges() async {
     final db = await DatabaseHelper.instance.database;
-    final rows = await db.query('user_badges', orderBy: 'unlocked_at DESC');
+    final rows = await db.query(
+      'user_badges',
+      where: 'user_id = ?',
+      whereArgs: [SessionService.instance.requireUserId],
+      orderBy: 'unlocked_at DESC',
+    );
     return rows.map(UserBadge.fromMap).toList();
   }
 
@@ -53,6 +59,7 @@ class BadgeDao {
 
       if (currentValue >= badge.conditionValue) {
         await db.insert('user_badges', {
+          'user_id': SessionService.instance.requireUserId,
           'badge_id': badge.id,
           'unlocked_at': now,
         });

@@ -1,9 +1,14 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'screens/splash_screen.dart';
 import 'services/notification_service.dart';
+import 'state/auth_provider.dart';
 import 'state/badges_provider.dart';
 import 'state/goals_provider.dart';
 import 'state/history_provider.dart';
@@ -18,6 +23,10 @@ import 'theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
   await initializeDateFormatting('vi');
   await NotificationService.instance.init();
   runApp(const RunTrackerApp());
@@ -30,6 +39,7 @@ class RunTrackerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ProfileProvider()),
         ChangeNotifierProvider(create: (_) => HomeProvider()),
         ChangeNotifierProvider(create: (_) => HistoryProvider()),

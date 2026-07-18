@@ -1,3 +1,4 @@
+import '../services/session_service.dart';
 import 'database_helper.dart';
 import 'models.dart';
 
@@ -6,8 +7,8 @@ class WeeklyChallengeDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
       'weekly_challenges',
-      where: 'week_start_date = ?',
-      whereArgs: [weekStartDate],
+      where: 'week_start_date = ? AND user_id = ?',
+      whereArgs: [weekStartDate, SessionService.instance.requireUserId],
       limit: 1,
     );
     if (rows.isEmpty) return null;
@@ -18,8 +19,8 @@ class WeeklyChallengeDao {
     final db = await DatabaseHelper.instance.database;
     final rows = await db.query(
       'weekly_challenges',
-      where: 'week_start_date < ?',
-      whereArgs: [weekStartDate],
+      where: 'week_start_date < ? AND user_id = ?',
+      whereArgs: [weekStartDate, SessionService.instance.requireUserId],
       orderBy: 'week_start_date DESC',
       limit: 1,
     );
@@ -29,7 +30,8 @@ class WeeklyChallengeDao {
 
   Future<int> insert(WeeklyChallenge challenge) async {
     final db = await DatabaseHelper.instance.database;
-    return db.insert('weekly_challenges', challenge.toMap());
+    final map = challenge.toMap()..['user_id'] = SessionService.instance.requireUserId;
+    return db.insert('weekly_challenges', map);
   }
 
   Future<void> markAchieved(int id) async {
@@ -37,8 +39,8 @@ class WeeklyChallengeDao {
     await db.update(
       'weekly_challenges',
       {'achieved': 1},
-      where: 'id = ?',
-      whereArgs: [id],
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [id, SessionService.instance.requireUserId],
     );
   }
 }

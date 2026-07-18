@@ -1,28 +1,38 @@
 import 'package:sqflite/sqflite.dart';
 
+import '../services/session_service.dart';
 import 'database_helper.dart';
 import 'models.dart';
 
 class ProfileDao {
   Future<UserProfile?> getProfile() async {
     final db = await DatabaseHelper.instance.database;
-    final rows = await db.query('user_profile', where: 'id = 1');
+    final rows = await db.query(
+      'user_profile',
+      where: 'user_id = ?',
+      whereArgs: [SessionService.instance.requireUserId],
+    );
     if (rows.isEmpty) return null;
     return UserProfile.fromMap(rows.first);
   }
 
   Future<void> saveProfile(UserProfile profile) async {
     final db = await DatabaseHelper.instance.database;
-    await db.insert(
-      'user_profile',
-      profile.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    final map = profile.toMap()
+      ..remove('id')
+      ..['user_id'] = SessionService.instance.requireUserId;
+    // `user_profile.user_id` is UNIQUE, so INSERT OR REPLACE upserts on it
+    // the same way the old code relied on the (now removed) `id = 1` PK.
+    await db.insert('user_profile', map, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<StreakInfo> getStreakInfo() async {
     final db = await DatabaseHelper.instance.database;
-    final rows = await db.query('streak_info', where: 'id = 1');
+    final rows = await db.query(
+      'streak_info',
+      where: 'user_id = ?',
+      whereArgs: [SessionService.instance.requireUserId],
+    );
     if (rows.isEmpty) return const StreakInfo();
     return StreakInfo.fromMap(rows.first);
   }
@@ -34,6 +44,7 @@ class ProfileDao {
   /// `best_streak` always holds the highest streak ever reached.
   Future<StreakInfo> updateStreak(String runDate) async {
     final db = await DatabaseHelper.instance.database;
+    final userId = SessionService.instance.requireUserId;
     final current = await getStreakInfo();
 
     final runDay = DateTime.parse(runDate);
@@ -66,11 +77,11 @@ class ProfileDao {
       lastRunDate: runDate,
     );
 
-    await db.update(
-      'streak_info',
-      updated.toMap(),
-      where: 'id = 1',
-    );
+    final map = updated.toMap()
+      ..remove('id')
+      ..['user_id'] = userId;
+    // `streak_info.user_id` is UNIQUE, so INSERT OR REPLACE upserts on it.
+    await db.insert('streak_info', map, conflictAlgorithm: ConflictAlgorithm.replace);
 
     return updated;
   }

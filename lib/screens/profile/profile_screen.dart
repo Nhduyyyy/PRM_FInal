@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../db/activity_dao.dart';
+import '../../state/auth_provider.dart';
 import '../../state/badges_provider.dart';
+import '../../state/pedometer_provider.dart';
 import '../../state/profile_provider.dart';
 import '../../utils/export_util.dart';
+import '../auth/login_screen.dart';
 import '../backup/backup_restore_screen.dart';
 import '../badges/badges_screen.dart';
 import '../goals/goals_screen.dart';
@@ -119,6 +122,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           _SettingsTile(
+            icon: Icons.logout,
+            label: 'Đăng xuất',
+            color: scheme.error,
+            onTap: _confirmLogout,
+          ),
+          _SettingsTile(
             icon: Icons.info_outline,
             label: 'Về ứng dụng',
             onTap: () => showAboutDialog(
@@ -209,6 +218,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _exportJson() => ExportUtil.exportAsJson();
 
   Future<void> _exportCsv() => ExportUtil.exportAsCsv();
+
+  Future<void> _confirmLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Đăng xuất'),
+        content: const Text('Bạn có chắc muốn đăng xuất khỏi tài khoản này?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Huỷ')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Đăng xuất')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final pedometer = context.read<PedometerProvider>();
+    final auth = context.read<AuthProvider>();
+    await pedometer.stop();
+    await auth.logout();
+    if (!mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+  }
 }
 
 class _QuickStat extends StatelessWidget {
@@ -234,14 +269,21 @@ class _SettingsTile extends StatelessWidget {
   final String label;
   final Widget? trailing;
   final VoidCallback onTap;
+  final Color? color;
 
-  const _SettingsTile({required this.icon, required this.label, this.trailing, required this.onTap});
+  const _SettingsTile({
+    required this.icon,
+    required this.label,
+    this.trailing,
+    required this.onTap,
+    this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon),
-      title: Text(label),
+      leading: Icon(icon, color: color),
+      title: Text(label, style: color != null ? TextStyle(color: color) : null),
       trailing: trailing ?? const Icon(Icons.chevron_right),
       onTap: onTap,
     );

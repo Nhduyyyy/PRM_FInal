@@ -1,3 +1,6 @@
+import 'package:sqflite/sqflite.dart';
+
+import '../services/session_service.dart';
 import 'database_helper.dart';
 import 'models.dart';
 
@@ -59,7 +62,11 @@ class UserLevelDao {
 
   Future<UserLevel> getUserLevel() async {
     final db = await DatabaseHelper.instance.database;
-    final rows = await db.query('user_level', where: 'id = 1');
+    final rows = await db.query(
+      'user_level',
+      where: 'user_id = ?',
+      whereArgs: [SessionService.instance.requireUserId],
+    );
     if (rows.isEmpty) return const UserLevel();
     return UserLevel.fromMap(rows.first);
   }
@@ -74,7 +81,11 @@ class UserLevelDao {
     final leveledUp = newLevel > current.currentLevel;
 
     final updated = UserLevel(totalXp: newTotal, currentLevel: newLevel);
-    await db.update('user_level', updated.toMap(), where: 'id = 1');
+    final map = updated.toMap()
+      ..remove('id')
+      ..['user_id'] = SessionService.instance.requireUserId;
+    // `user_level.user_id` is UNIQUE, so INSERT OR REPLACE upserts on it.
+    await db.insert('user_level', map, conflictAlgorithm: ConflictAlgorithm.replace);
     return (updated, leveledUp);
   }
 }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../state/auth_provider.dart';
 import '../state/profile_provider.dart';
+import 'auth/login_screen.dart';
 import 'home/home_shell.dart';
 import 'onboarding/onboarding_screen.dart';
 
@@ -20,13 +22,26 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _init() async {
+    final authProvider = context.read<AuthProvider>();
     final profileProvider = context.read<ProfileProvider>();
+
     await Future.wait([
-      profileProvider.load(),
+      authProvider.restoreSession(),
       Future.delayed(const Duration(milliseconds: 900)),
     ]);
 
     if (!mounted) return;
+
+    if (!authProvider.isLoggedIn) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+      return;
+    }
+
+    await profileProvider.load();
+    if (!mounted) return;
+
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => profileProvider.hasProfile ? const HomeShell() : const OnboardingScreen(),

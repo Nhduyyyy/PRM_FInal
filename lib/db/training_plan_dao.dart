@@ -1,3 +1,6 @@
+import 'package:sqflite/sqflite.dart';
+
+import '../services/session_service.dart';
 import 'database_helper.dart';
 import 'models.dart';
 
@@ -35,26 +38,40 @@ class TrainingPlanDao {
 
   Future<ActivePlan> getActivePlan() async {
     final db = await DatabaseHelper.instance.database;
-    final rows = await db.query('active_plan', where: 'id = 1');
+    final rows = await db.query(
+      'active_plan',
+      where: 'user_id = ?',
+      whereArgs: [SessionService.instance.requireUserId],
+    );
     if (rows.isEmpty) return const ActivePlan();
     return ActivePlan.fromMap(rows.first);
   }
 
   Future<void> startPlan(int planId, String startDate) async {
     final db = await DatabaseHelper.instance.database;
-    await db.update(
+    // `active_plan.user_id` is UNIQUE, so INSERT OR REPLACE upserts on it
+    // whether or not this user already has a row.
+    await db.insert(
       'active_plan',
-      {'plan_id': planId, 'start_date': startDate},
-      where: 'id = 1',
+      {
+        'user_id': SessionService.instance.requireUserId,
+        'plan_id': planId,
+        'start_date': startDate,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 
   Future<void> stopActivePlan() async {
     final db = await DatabaseHelper.instance.database;
-    await db.update(
+    await db.insert(
       'active_plan',
-      {'plan_id': null, 'start_date': null},
-      where: 'id = 1',
+      {
+        'user_id': SessionService.instance.requireUserId,
+        'plan_id': null,
+        'start_date': null,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 
