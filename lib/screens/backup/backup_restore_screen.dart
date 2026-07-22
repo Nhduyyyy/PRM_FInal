@@ -1,9 +1,12 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/backup_service.dart';
+import '../../services/demo_seed_service.dart';
+import '../splash_screen.dart';
 
 class BackupRestoreScreen extends StatefulWidget {
   const BackupRestoreScreen({super.key});
@@ -23,6 +26,37 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
       final file = await _service.exportToFile();
       await _service.shareBackup();
       if (mounted) setState(() => _lastExportPath = file.path);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _seedDemoData() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Tạo dữ liệu demo?'),
+        content: const Text(
+          'Sẽ tạo tài khoản "demo" (mật khẩu "demo123") với ~10 tuần lịch sử chạy bộ, '
+          'mục tiêu, huy hiệu, giáo án, streak... và chuyển phiên hiện tại sang tài khoản này. '
+          'Chạy lại sẽ xoá và tạo mới toàn bộ dữ liệu demo.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Huỷ')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Tạo')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      await DemoSeedService().seedDemoAccount();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const SplashScreen()),
+        (route) => false,
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -100,6 +134,22 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
             if (_busy) ...[
               const SizedBox(height: 20),
               const Center(child: CircularProgressIndicator()),
+            ],
+            if (kDebugMode) ...[
+              const Divider(height: 40),
+              Text('Công cụ debug', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _seedDemoData,
+                icon: const Icon(Icons.auto_awesome_outlined),
+                label: const Text('Tạo dữ liệu demo (~10 tuần)'),
+                style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 18)),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Đăng nhập bằng demo / demo123 sau khi tạo. Chỉ hiển thị ở bản debug.',
+                style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
             ],
           ],
         ),
