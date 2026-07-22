@@ -366,6 +366,7 @@ class _TodayPlanCard extends StatelessWidget {
           ),
           if (!isRest)
             ElevatedButton(
+              style: ElevatedButton.styleFrom(minimumSize: const Size(64, 40)),
               onPressed: () async {
                 await Navigator.of(context).push(
                   MaterialPageRoute(
