@@ -54,6 +54,7 @@ class RunTrackerApp extends StatelessWidget {
       child: Consumer<ProfileProvider>(
         builder: (context, profile, _) {
           return MaterialApp(
+            navigatorKey: NotificationService.navigatorKey,
             title: 'Run Tracker',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light(),

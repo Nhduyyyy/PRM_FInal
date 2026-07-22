@@ -85,6 +85,7 @@ dependencies:
 
   # Backup & Restore file picking
   file_picker: ^10.0.0
+  flutter_timezone: ^5.1.0
 
 dev_dependencies:
   flutter_test:
